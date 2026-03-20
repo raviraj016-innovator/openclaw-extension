@@ -170,9 +170,9 @@ function extractProfileFields(content: string, platform: string, title: string):
     }
   }
 
-  // Extract website from content (look for http links that aren't the platform itself)
-  const urlMatch = content.match(/https?:\/\/(?!(?:www\.)?(?:linkedin|github|twitter|x|instagram|facebook)\.com)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[^\s)>"]*/);
-  if (urlMatch) {
+  // Extract website from content (exclude platform domains, CDNs, and image/asset URLs)
+  const urlMatch = content.match(/https?:\/\/(?!(?:www\.)?(?:linkedin|licdn|github|twitter|x|instagram|facebook|googleusercontent|fbcdn|twimg|cdninstagram)\.com)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[^\s)>"]*/);
+  if (urlMatch && !/\.(png|jpg|jpeg|gif|svg|webp|ico|css|js|woff|woff2)$/i.test(urlMatch[0])) {
     profile.website = urlMatch[0];
   }
 

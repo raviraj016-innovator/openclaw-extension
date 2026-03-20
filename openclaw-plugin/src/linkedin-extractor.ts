@@ -380,10 +380,10 @@ export function extractLinkedInContact(
     location = locationMatch[1]!.trim().slice(0, 100);
   }
 
-  // Extract website
+  // Extract website (exclude LinkedIn CDN, image/asset URLs)
   let website: string | undefined;
-  const urlMatch = safeContent.match(/https?:\/\/(?!(?:www\.)?linkedin\.com)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[^\s)>"']*/);
-  if (urlMatch) {
+  const urlMatch = safeContent.match(/https?:\/\/(?!(?:www\.)?(?:linkedin|licdn|googleusercontent)\.com)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[^\s)>"']*/);
+  if (urlMatch && !/\.(png|jpg|jpeg|gif|svg|webp|ico|css|js|woff|woff2)$/i.test(urlMatch[0])) {
     website = urlMatch[0];
   }
 
