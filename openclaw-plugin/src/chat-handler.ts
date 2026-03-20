@@ -9,6 +9,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import type { ContextDatabase } from './database.js';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+const DEFAULT_MODEL = process.env['ANTHROPIC_MODEL'] || 'claude-3-haiku-20240307';
 
 export class ChatHandler {
   private database: ContextDatabase;
@@ -82,7 +83,7 @@ Answer the user's question based on this context. Be specific — reference actu
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20241022',
+          model: DEFAULT_MODEL,
           max_tokens: 2048,
           system: systemPrompt,
           messages: [{ role: 'user', content: parsed.message }],
