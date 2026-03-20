@@ -329,7 +329,7 @@ export async function inferEmail(
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6-20250514',
+        model: 'claude-sonnet-4-5-20241022',
         max_tokens: 100,
         system: 'You are an email pattern expert. Given a person\'s name and company, suggest their most likely work email address. Respond with ONLY the email address and a confidence percentage (0-100). Format: email@domain.com (85%)',
         messages: [{ role: 'user', content: `Name: ${name}\nCompany: ${company}` }],
