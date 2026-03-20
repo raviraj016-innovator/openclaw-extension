@@ -467,6 +467,32 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     navigator.clipboard.writeText(parts.join(' - ')).catch(function() {});
   }
 
+  // --- Event delegation for copy buttons (avoids quoting issues in template literal) ---
+  document.addEventListener('click', function(e) {
+    var btn = e.target;
+    if (!btn || !btn.getAttribute) return;
+
+    // Copy email button
+    var copyVal = btn.getAttribute('data-copy');
+    if (copyVal) {
+      e.stopPropagation();
+      copyText(copyVal);
+      return;
+    }
+
+    // Copy card button
+    if (btn.getAttribute('data-copy-card')) {
+      e.stopPropagation();
+      copyCard(
+        btn.getAttribute('data-card-name') || '',
+        btn.getAttribute('data-card-headline') || '',
+        btn.getAttribute('data-card-company') || '',
+        btn.getAttribute('data-card-email') || ''
+      );
+      return;
+    }
+  });
+
   // --- Outreach readiness score bar ---
   function outreachReadinessBar(c) {
     var score = 0;
@@ -515,7 +541,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         '&#x1F4E7; ' + esc(c.email) +
         ' <span style="color:#666;font-size:11px;">(' + esc(c.email_source || '?') + (c.email_confidence > 0 ? ' ' + Math.round(c.email_confidence * 100) + '%' : '') + ')</span>' +
         confidenceBadge(c.email, c.email_confidence) +
-        '<button class="copy-btn" onclick="event.stopPropagation();copyText(\'' + esc(c.email).replace(/'/g, "\\'") + '\')">Copy</button>' +
+        '<button class="copy-btn" data-copy="' + esc(c.email) + '">Copy</button>' +
       '</div>';
     } else {
       emailHtml = '<div style="color:#555;font-size:12px;font-style:italic;display:flex;align-items:center;gap:4px;">' +
@@ -530,12 +556,11 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     if (c.twitter_url) links.push('<a href="' + esc(c.twitter_url) + '" target="_blank" style="color:#3b82f6;font-size:11px;text-decoration:none;">Twitter</a>');
     if (c.website) links.push('<a href="' + esc(c.website) + '" target="_blank" style="color:#3b82f6;font-size:11px;text-decoration:none;">Website</a>');
 
-    // "Copy Card" data attributes
-    var copyCardAttr = 'onclick="event.stopPropagation();copyCard(\'' +
-      esc(c.name).replace(/'/g, "\\'") + "','" +
-      esc(c.headline || '').replace(/'/g, "\\'") + "','" +
-      esc(c.company || '').replace(/'/g, "\\'") + "','" +
-      esc(c.email || '').replace(/'/g, "\\'") + '\')"';
+    // "Copy Card" data attributes — use data-* to avoid quoting hell in template literal
+    var copyCardAttr = 'data-copy-card="1" data-card-name="' + esc(c.name) +
+      '" data-card-headline="' + esc(c.headline || '') +
+      '" data-card-company="' + esc(c.company || '') +
+      '" data-card-email="' + esc(c.email || '') + '"';
 
     // Delete button
     var deleteHtml = includeDelete !== false
