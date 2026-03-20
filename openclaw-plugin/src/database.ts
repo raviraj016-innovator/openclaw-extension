@@ -117,7 +117,6 @@ export class ContextDatabase {
       CREATE INDEX IF NOT EXISTS idx_visits_domain ON page_visits(domain);
       CREATE INDEX IF NOT EXISTS idx_visits_created ON page_visits(created_at);
       CREATE INDEX IF NOT EXISTS idx_visits_url ON page_visits(url);
-      CREATE INDEX IF NOT EXISTS idx_visits_person ON page_visits(person_id);
       CREATE INDEX IF NOT EXISTS idx_interactions_session ON interactions(session_id);
       CREATE INDEX IF NOT EXISTS idx_interactions_visit ON interactions(visit_id);
       CREATE INDEX IF NOT EXISTS idx_interactions_created ON interactions(created_at);
@@ -159,7 +158,6 @@ export class ContextDatabase {
       CREATE INDEX IF NOT EXISTS idx_contacts_linkedin ON contacts(linkedin_url);
       CREATE INDEX IF NOT EXISTS idx_contacts_github ON contacts(github_url);
       CREATE INDEX IF NOT EXISTS idx_contacts_twitter ON contacts(twitter_url);
-      CREATE INDEX IF NOT EXISTS idx_contacts_person ON contacts(person_id);
       CREATE INDEX IF NOT EXISTS idx_contacts_last_seen ON contacts(last_seen_at);
     `);
 
@@ -167,6 +165,12 @@ export class ContextDatabase {
     this.addColumnIfMissing('contacts', 'person_id', 'INTEGER REFERENCES persons(id)');
     this.addColumnIfMissing('contacts', 'facebook_url', 'TEXT UNIQUE');
     this.addColumnIfMissing('page_visits', 'person_id', 'INTEGER REFERENCES persons(id)');
+
+    // Create indexes on migrated columns (must run AFTER addColumnIfMissing)
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_visits_person ON page_visits(person_id);
+      CREATE INDEX IF NOT EXISTS idx_contacts_person ON contacts(person_id);
+    `);
 
     // LinkedIn Premium / Sales Navigator fields
     this.addColumnIfMissing('contacts', 'connection_degree', 'TEXT');
