@@ -460,6 +460,8 @@ function startBackgroundPings(): void {
 // --- Context menu setup ---
 
 function setupContextMenu(): void {
+  // Remove existing menu items first to prevent duplicate ID error on service worker restart
+  try { chrome.contextMenus.removeAll(); } catch { /* Firefox uses different API */ }
   platform.createContextMenu({
     id: 'ask-openclaw',
     title: 'Ask OpenClaw about this',

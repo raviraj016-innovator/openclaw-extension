@@ -363,10 +363,10 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
     document.getElementById('tab-' + tab).classList.add('active');
     if (tab === 'contacts') {
-      loadContacts();
-      loadContactHealth();
-      loadMergeCandidates();
-      loadLinkedInStats();
+      // Fire all loads in parallel for speed
+      Promise.all([loadContacts(), loadContactHealth(), loadLinkedInStats()]);
+      // Merge candidates is slower — load after main data
+      setTimeout(loadMergeCandidates, 500);
     }
   }
 
@@ -821,6 +821,8 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
   <script>
     async function refresh() {
+      // Skip refresh when contacts tab is active — it has its own data loading
+      if (document.getElementById('page-dashboard').style.display === 'none') return;
       try {
         const [statsRes, browsingRes, summaryRes] = await Promise.all([
           fetch('/context/stats'),
