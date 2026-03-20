@@ -188,33 +188,44 @@ export function findCanonicalInUrl(content: string, nameFromTitle: string): { ur
 /**
  * Extract the person's name from a LinkedIn page title.
  *
- * Standard: "John Smith - Senior Engineer - Anthropic | LinkedIn"
- * Sales Nav: "John Smith | LinkedIn Sales Navigator"
- * Premium:  "John Smith - Senior Engineer - Anthropic | LinkedIn"
+ * Real-world LinkedIn title formats:
+ *   "John Smith - Senior Engineer - Anthropic | LinkedIn"
+ *   "John Smith | LinkedIn"
+ *   "(2) John Smith | LinkedIn"
+ *   "John Smith - LinkedIn"
+ *   "John Smith, MBA - Senior Engineer - Anthropic | LinkedIn"
+ *   "John Smith | LinkedIn Sales Navigator"
  */
 function extractNameFromTitle(title: string): string {
-  return title
-    .replace(/\s*\|?\s*(LinkedIn|Sales Navigator|LinkedIn Sales Navigator).*$/i, '')
-    .replace(/\s*[-–—]\s*.+[-–—]\s*.+$/, (match) => {
-      // If title is "Name - Role - Company", take only the name
-      const parts = match.split(/\s*[-–—]\s*/);
-      return ''; // Remove everything after name
-    })
-    .split(/\s*[-–—]\s*/)[0]!
-    .replace(/\s*\(.*?\)\s*$/, '')
-    .trim();
+  // Step 1: Remove notification count prefix like "(2) " or "(99+) "
+  let cleaned = title.replace(/^\(\d+\+?\)\s*/, '');
+
+  // Step 2: Remove LinkedIn suffix (everything from | or last - before "LinkedIn")
+  cleaned = cleaned.replace(/\s*\|?\s*LinkedIn.*$/i, '').trim();
+
+  // Step 3: Split by dash separators and take the first part as name
+  const parts = cleaned.split(/\s*[-–—]\s*/);
+  const name = (parts[0] || '').trim();
+
+  return name;
 }
 
 /**
  * Extract role and company from LinkedIn title.
  * "John Smith - Senior Engineer - Anthropic | LinkedIn" → { role: "Senior Engineer", company: "Anthropic" }
+ * "John Smith - Engineer at Google | LinkedIn" → { role: "Engineer at Google" }
  */
 function extractRoleCompanyFromTitle(title: string): { role?: string; company?: string } {
-  const cleaned = title.replace(/\s*\|?\s*(LinkedIn|Sales Navigator).*$/i, '').trim();
+  let cleaned = title.replace(/^\(\d+\+?\)\s*/, '');
+  cleaned = cleaned.replace(/\s*\|?\s*LinkedIn.*$/i, '').trim();
   const parts = cleaned.split(/\s*[-–—]\s*/);
 
   if (parts.length >= 3) {
     return { role: parts[1]!.trim(), company: parts[2]!.trim() };
+  }
+  if (parts.length === 2) {
+    // "Name - Role at Company" or "Name - Headline"
+    return { role: parts[1]!.trim() };
   }
   return {};
 }
@@ -366,11 +377,18 @@ export function extractLinkedInContact(
   // Extract role/company from title
   const { role, company } = extractRoleCompanyFromTitle(title);
 
-  // Extract headline from content
+  // Extract headline: prefer the role from title, fall back to content extraction
   let headline: string | undefined;
-  const headlineMatch = safeContent.match(/(?:^|\n)([^\n]{10,100}(?:at|@|Engineer|Manager|Director|CEO|CTO|Founder|Developer|Designer|Consultant|VP|President|Head of|Lead)[^\n]*)/i);
-  if (headlineMatch) {
-    headline = headlineMatch[1]!.trim().slice(0, 200);
+  if (role && company) {
+    headline = `${role} at ${company}`;
+  } else if (role) {
+    headline = role;
+  } else {
+    // Try extracting from content — look for short line near the top that looks like a headline
+    const headlineMatch = safeContent.slice(0, 2000).match(/(?:^|\n)([^\n]{10,150}(?:at|@|Engineer|Manager|Director|CEO|CTO|CFO|COO|Founder|Developer|Designer|Consultant|VP|President|Head of|Lead|Partner|Analyst|Researcher|Professor|Student|Intern|Freelance|Entrepreneur|Builder|Creator)[^\n]{0,50})/i);
+    if (headlineMatch) {
+      headline = headlineMatch[1]!.trim().slice(0, 200);
+    }
   }
 
   // Extract location

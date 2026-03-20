@@ -133,7 +133,9 @@ interface ExtractedProfile {
 function extractProfileFields(content: string, platform: string, title: string): ExtractedProfile {
   // Start with the page title as the name (common pattern: "Name | Platform")
   let name = title
-    .replace(/\s*[|–—-]\s*(LinkedIn|GitHub|Twitter|X|Instagram|Facebook).*$/i, '')
+    .replace(/^\(\d+\+?\)\s*/, '')  // Remove notification count "(2) "
+    .replace(/\s*[|]\s*(LinkedIn|GitHub|Twitter|X|Instagram|Facebook).*$/i, '')
+    .split(/\s*[-–—]\s*/)[0]!  // Take first part before any dash
     .replace(/\s*\(.*?\)\s*$/, '')
     .trim();
 
@@ -142,17 +144,20 @@ function extractProfileFields(content: string, platform: string, title: string):
 
   if (platform === 'linkedin') {
     // LinkedIn: "Name - Role - Company | LinkedIn"
-    const titleMatch = title.match(/^(.+?)\s*[-–—]\s*(.+?)\s*[-–—]\s*(.+?)\s*\|/);
-    if (titleMatch) {
-      profile.name = titleMatch[1]!.trim();
-      profile.role = titleMatch[2]!.trim();
-      profile.company = titleMatch[3]!.trim();
+    const cleaned = title.replace(/^\(\d+\+?\)\s*/, '').replace(/\s*\|?\s*LinkedIn.*$/i, '').trim();
+    const parts = cleaned.split(/\s*[-–—]\s*/);
+    if (parts.length >= 3) {
+      profile.name = parts[0]!.trim();
+      profile.role = parts[1]!.trim();
+      profile.company = parts[2]!.trim();
+    } else if (parts.length === 2) {
+      profile.name = parts[0]!.trim();
+      profile.headline = parts[1]!.trim();
     }
 
-    // Extract headline from content (usually near the top)
-    const headlineMatch = content.match(/(?:^|\n)([^\n]{10,100}(?:at|@|Engineer|Manager|Director|CEO|CTO|Founder|Developer|Designer|Consultant)[^\n]*)/i);
-    if (headlineMatch) {
-      profile.headline = headlineMatch[1]!.trim().slice(0, 200);
+    // Build headline from role+company if available
+    if (profile.role && profile.company) {
+      profile.headline = `${profile.role} at ${profile.company}`;
     }
 
     // Location
