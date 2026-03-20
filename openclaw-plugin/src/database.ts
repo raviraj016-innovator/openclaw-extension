@@ -163,7 +163,9 @@ export class ContextDatabase {
 
     // --- Incremental migrations for existing databases ---
     this.addColumnIfMissing('contacts', 'person_id', 'INTEGER REFERENCES persons(id)');
-    this.addColumnIfMissing('contacts', 'facebook_url', 'TEXT UNIQUE');
+    this.addColumnIfMissing('contacts', 'facebook_url', 'TEXT');
+    // UNIQUE constraint can't be added via ALTER TABLE — use a separate index
+    this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_facebook ON contacts(facebook_url);');
     this.addColumnIfMissing('page_visits', 'person_id', 'INTEGER REFERENCES persons(id)');
 
     // Create indexes on migrated columns (must run AFTER addColumnIfMissing)
