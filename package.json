@@ -1,0 +1,26 @@
+{
+  "name": "openclaw-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build/build.js",
+    "build:firefox": "BROWSER=firefox node build/build.js",
+    "build:all": "node build/build.js && BROWSER=firefox node build/build.js",
+    "dev": "node build/build.js --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@playwright/test": "^1.50.0",
+    "@types/chrome": "^0.0.287",
+    "@types/webextension-polyfill": "^0.12.1",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "webextension-polyfill": "^0.12.0"
+  }
+}

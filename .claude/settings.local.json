@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(mkdir -p icons)",
+      "Bash(icons/placeholder.txt:*)",
+      "Bash(npm install:*)",
+      "Bash(npx vitest:*)",
+      "Bash(cd:*)",
+      "Bash(node build/build.js)",
+      "Bash(node -e \":*)",
+      "Bash(rm -rf dist)",
+      "Bash(B=~/.claude/skills/gstack/browse/dist/browse)",
+      "Bash($B goto:*)",
+      "Bash($B snapshot:*)",
+      "Bash($B help:*)",
+      "Bash(npx playwright:*)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(timeout 10 $B screenshot \".gstack/qa-reports/screenshots/popup.png\")",
+      "Bash(npx tsc:*)",
+      "Bash(BROWSER=firefox node build/build.js)",
+      "Bash(tasklist)",
+      "Read(//c/Users/ravir/AppData/Local/**)",
+      "Read(//c/Users/ravir/AppData/Roaming/**)",
+      "Read(//c/Users/ravir/.openclaw//**)",
+      "Bash(where openclaw:*)",
+      "Bash(npm run:*)"
+    ]
+  }
+}

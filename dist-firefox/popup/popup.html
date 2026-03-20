@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=400">
+  <title>OpenClaw</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="logo">🦞</span>
+        <span class="title">OpenClaw</span>
+      </div>
+      <div class="header-right">
+        <span id="status-dot" class="status-dot"></span>
+        <span id="status-text" class="status-text">Connecting...</span>
+      </div>
+    </div>
+
+    <!-- Greeting -->
+    <div id="greeting" class="greeting"></div>
+
+    <!-- Not connected state -->
+    <div id="setup-panel" class="panel" style="display: none;">
+      <p class="panel-desc">Connect to your OpenClaw instance to start streaming browser context.</p>
+      <div class="auth-buttons">
+        <button id="btn-oauth" class="btn btn-primary">Connect with OpenClaw Cloud</button>
+        <button id="btn-apikey" class="btn btn-secondary">Use API Key</button>
+      </div>
+      <div id="apikey-form" style="display: none;">
+        <input id="input-url" type="url" placeholder="https://your-openclaw.example.com" class="input">
+        <input id="input-key" type="password" placeholder="API Key" class="input">
+        <button id="btn-connect" class="btn btn-primary">Connect</button>
+      </div>
+    </div>
+
+    <!-- Connected state -->
+    <div id="connected-panel" class="panel" style="display: none;">
+      <!-- Tab counts -->
+      <div class="stat-row">
+        <div class="stat">
+          <span id="tab-allowed" class="stat-value">0</span>
+          <span class="stat-label">Streaming</span>
+        </div>
+        <div class="stat">
+          <span id="tab-blocked" class="stat-value">0</span>
+          <span class="stat-label">Blocked</span>
+        </div>
+        <div class="stat">
+          <span id="queue-depth" class="stat-value">0</span>
+          <span class="stat-label">Queued</span>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="controls">
+        <button id="btn-pause" class="btn btn-secondary btn-small">⏸ Pause</button>
+        <button id="btn-debug" class="btn btn-secondary btn-small">🔍 Debug Overlay</button>
+        <button id="btn-sidepanel" class="btn btn-secondary btn-small">💬 Chat</button>
+      </div>
+
+      <!-- Classification prompt -->
+      <div id="teach-prompt" class="teach-prompt" style="display: none;">
+        <p>OpenClaw doesn't know <strong id="teach-domain"></strong> yet.</p>
+        <div class="teach-buttons">
+          <button id="btn-teach-yes" class="btn btn-small btn-primary">Yes, it's a work tool</button>
+          <button id="btn-teach-no" class="btn btn-small btn-secondary">No, block it</button>
+        </div>
+      </div>
+
+      <!-- Disconnect -->
+      <button id="btn-disconnect" class="btn btn-danger btn-small">Disconnect</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

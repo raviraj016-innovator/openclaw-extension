@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenClaw Chat</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <div class="sp-header">
+      <span class="sp-logo">🦞</span>
+      <span class="sp-title">OpenClaw</span>
+      <span id="sp-status" class="sp-status">Connecting...</span>
+    </div>
+
+    <!-- Suggestion banner -->
+    <div id="suggestion-banner" class="suggestion-banner" style="display: none;">
+      <div class="suggestion-title" id="suggestion-title"></div>
+      <div class="suggestion-body" id="suggestion-body"></div>
+      <div class="suggestion-actions" id="suggestion-actions"></div>
+    </div>
+
+    <!-- Chat messages -->
+    <div id="chat-messages" class="chat-messages">
+      <div class="chat-empty">
+        <p>Chat with OpenClaw about what you're browsing.</p>
+        <p class="chat-hint">OpenClaw can see your active tab's content.</p>
+      </div>
+    </div>
+
+    <!-- Chat input -->
+    <div class="chat-input-area">
+      <textarea id="chat-input" class="chat-input" placeholder="Ask OpenClaw..." rows="1"></textarea>
+      <button id="btn-send" class="btn-send">↑</button>
+    </div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
