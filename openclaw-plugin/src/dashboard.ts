@@ -467,13 +467,13 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     navigator.clipboard.writeText(parts.join(' - ')).catch(function() {});
   }
 
-  // --- Event delegation for copy buttons (avoids quoting issues in template literal) ---
+  // --- Event delegation for all dynamic buttons (avoids quoting issues in template literal) ---
   document.addEventListener('click', function(e) {
-    var btn = e.target;
-    if (!btn || !btn.getAttribute) return;
+    var el = e.target;
+    if (!el || !el.getAttribute) return;
 
     // Copy email button
-    var copyVal = btn.getAttribute('data-copy');
+    var copyVal = el.getAttribute('data-copy');
     if (copyVal) {
       e.stopPropagation();
       copyText(copyVal);
@@ -481,14 +481,51 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     }
 
     // Copy card button
-    if (btn.getAttribute('data-copy-card')) {
+    if (el.getAttribute('data-copy-card')) {
       e.stopPropagation();
       copyCard(
-        btn.getAttribute('data-card-name') || '',
-        btn.getAttribute('data-card-headline') || '',
-        btn.getAttribute('data-card-company') || '',
-        btn.getAttribute('data-card-email') || ''
+        el.getAttribute('data-card-name') || '',
+        el.getAttribute('data-card-headline') || '',
+        el.getAttribute('data-card-company') || '',
+        el.getAttribute('data-card-email') || ''
       );
+      return;
+    }
+
+    // Delete contact button
+    var deleteId = el.getAttribute('data-delete-contact');
+    if (deleteId) {
+      e.stopPropagation();
+      deleteContact(parseInt(deleteId, 10));
+      return;
+    }
+
+    // Merge button
+    var mergeA = el.getAttribute('data-merge-a');
+    if (mergeA) {
+      e.stopPropagation();
+      mergeContacts(parseInt(mergeA, 10), parseInt(el.getAttribute('data-merge-b') || '0', 10));
+      return;
+    }
+
+    // Company group toggle
+    var companyGroupId = el.getAttribute('data-toggle-company');
+    if (!companyGroupId) {
+      // Check parent (click might be on child span)
+      var parent = el.parentElement;
+      if (parent) companyGroupId = parent.getAttribute('data-toggle-company');
+    }
+    if (companyGroupId) {
+      toggleCompanyGroup(companyGroupId, el);
+      return;
+    }
+
+    // Contact card timeline toggle — walk up to find the card
+    var card = el.closest('[data-toggle-timeline]');
+    if (card) {
+      var cardId = card.getAttribute('data-toggle-timeline');
+      var personId = parseInt(card.getAttribute('data-timeline-person') || '0', 10);
+      toggleTimeline(cardId, personId);
       return;
     }
   });
@@ -564,7 +601,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
     // Delete button
     var deleteHtml = includeDelete !== false
-      ? '<button class="delete-btn" title="Delete contact" onclick="event.stopPropagation();deleteContact(' + (c.id || 0) + ')">&times;</button>'
+      ? '<button class="delete-btn" title="Delete contact" data-delete-contact="' + (c.id || 0) + '">&times;</button>'
       : '';
 
     // Relationship strength bar (using times_viewed as proxy)
@@ -574,7 +611,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     var cardId = 'contact-card-' + (c.id || Math.random().toString(36).substr(2));
     var personId = c.person_id || '';
 
-    return '<div class="visit-card" id="' + cardId + '" data-person-id="' + esc(String(personId)) + '" style="cursor:pointer;" onclick="toggleTimeline(\'' + cardId + '\',' + (c.person_id || 0) + ')">' +
+    return '<div class="visit-card" id="' + cardId + '" data-person-id="' + esc(String(personId)) + '" style="cursor:pointer;" data-toggle-timeline="' + cardId + '" data-timeline-person="' + (c.person_id || 0) + '">' +
       deleteHtml +
       '<div class="visit-header" style="padding-right:28px;">' +
         '<span class="visit-title">' + platformIcon + connectionDegreeBadge + ' ' + esc(c.name) + salesNavBadge + premiumStar + '</span>' +
@@ -700,7 +737,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         var contacts = group.contacts || [];
         var groupId = 'company-group-' + idx;
         return '<div class="company-group">' +
-          '<div class="company-header" onclick="toggleCompanyGroup(\'' + groupId + '\', this)">' +
+          '<div class="company-header" data-toggle-company="' + groupId + '">' +
             '<span class="company-name">' + esc(companyName) + ' <span class="company-count">(' + contacts.length + ' contact' + (contacts.length !== 1 ? 's' : '') + ')</span></span>' +
             '<span class="company-arrow">&#x25BC;</span>' +
           '</div>' +
@@ -757,7 +794,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
             (b.company ? '<div class="mc-detail">' + esc(b.company) + '</div>' : '') +
             (b.platform ? '<div class="mc-detail" style="color:#666;">' + esc(b.platform) + '</div>' : '') +
           '</div>' +
-          '<button class="merge-btn" onclick="mergeContacts(' + (a.person_id || a.id || 0) + ',' + (b.person_id || b.id || 0) + ')">Merge</button>' +
+          '<button class="merge-btn" data-merge-a="' + (a.person_id || a.id || 0) + '" data-merge-b="' + (b.person_id || b.id || 0) + '">Merge</button>' +
         '</div>';
       }).join('');
     } catch (e) {
