@@ -515,7 +515,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         '&#x1F4E7; ' + esc(c.email) +
         ' <span style="color:#666;font-size:11px;">(' + esc(c.email_source || '?') + (c.email_confidence > 0 ? ' ' + Math.round(c.email_confidence * 100) + '%' : '') + ')</span>' +
         confidenceBadge(c.email, c.email_confidence) +
-        '<button class="copy-btn" onclick="event.stopPropagation();copyText(\'' + esc(c.email).replace(/'/g, "\\\\'") + '\')">Copy</button>' +
+        '<button class="copy-btn" onclick="event.stopPropagation();copyText(\'' + esc(c.email).replace(/'/g, "\\'") + '\')">Copy</button>' +
       '</div>';
     } else {
       emailHtml = '<div style="color:#555;font-size:12px;font-style:italic;display:flex;align-items:center;gap:4px;">' +
@@ -532,10 +532,10 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
     // "Copy Card" data attributes
     var copyCardAttr = 'onclick="event.stopPropagation();copyCard(\'' +
-      esc(c.name).replace(/'/g, "\\\\'") + "','" +
-      esc(c.headline || '').replace(/'/g, "\\\\'") + "','" +
-      esc(c.company || '').replace(/'/g, "\\\\'") + "','" +
-      esc(c.email || '').replace(/'/g, "\\\\'") + '\')"';
+      esc(c.name).replace(/'/g, "\\'") + "','" +
+      esc(c.headline || '').replace(/'/g, "\\'") + "','" +
+      esc(c.company || '').replace(/'/g, "\\'") + "','" +
+      esc(c.email || '').replace(/'/g, "\\'") + '\')"';
 
     // Delete button
     var deleteHtml = includeDelete !== false
