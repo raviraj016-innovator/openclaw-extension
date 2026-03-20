@@ -2,7 +2,9 @@
 set -euo pipefail
 exec > /var/log/openclaw-setup.log 2>&1
 
-REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+# IMDSv2 requires a token
+IMDS_TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+REGION=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
 PROJECT="${project_name}"
 DOMAIN="${domain}"
 REPO="${github_repo}"
@@ -27,9 +29,7 @@ fi
 
 # --- Read secrets from SSM ---
 echo "Reading secrets from SSM..."
-ANTHROPIC_KEY=$(aws ssm get-parameter --name "/$PROJECT/anthropic-api-key" --with-decryption --region "$REGION" --query 'Parameter.Value' --output text)
 EXT_TOKEN=$(aws ssm get-parameter --name "/$PROJECT/extension-token" --with-decryption --region "$REGION" --query 'Parameter.Value' --output text)
-GW_TOKEN=$(aws ssm get-parameter --name "/$PROJECT/gateway-token" --with-decryption --region "$REGION" --query 'Parameter.Value' --output text)
 
 # --- Clone repo ---
 cd /home/ubuntu
@@ -44,47 +44,10 @@ cd /home/ubuntu/openclaw-extension/openclaw-plugin
 sudo -u ubuntu npm install --production
 
 cat > .env << ENVFILE
-GATEWAY_URL=http://127.0.0.1:18789
-GATEWAY_TOKEN=$GW_TOKEN
 EXTENSION_TOKENS=$EXT_TOKEN
 PLUGIN_PORT=18790
 ENVFILE
 chown ubuntu:ubuntu .env
-
-# --- OpenClaw setup ---
-sudo -u ubuntu bash -c 'curl -fsSL https://get.openclaw.ai | bash' || echo "OpenClaw manual setup needed"
-
-mkdir -p /home/ubuntu/.openclaw
-cat > /home/ubuntu/.openclaw/openclaw.json << OCCONFIG
-{
-  "auth": {
-    "profiles": {
-      "anthropic:default": {
-        "provider": "anthropic",
-        "mode": "token",
-        "token": "$ANTHROPIC_KEY"
-      }
-    }
-  },
-  "gateway": {
-    "port": 18789,
-    "mode": "local",
-    "bind": "loopback",
-    "auth": {
-      "mode": "token",
-      "token": "$GW_TOKEN"
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "anthropic/claude-sonnet-4-6"
-      }
-    }
-  }
-}
-OCCONFIG
-chown -R ubuntu:ubuntu /home/ubuntu/.openclaw
 
 # --- Nginx ---
 cat > /etc/nginx/sites-available/openclaw-extension << NGINXCONF
@@ -122,7 +85,6 @@ nginx -t && systemctl reload nginx
 # --- PM2 services ---
 cd /home/ubuntu/openclaw-extension/openclaw-plugin
 sudo -u ubuntu pm2 start "npx tsx src/index.ts" --name openclaw-plugin --cwd /home/ubuntu/openclaw-extension/openclaw-plugin
-sudo -u ubuntu pm2 start "openclaw start" --name openclaw-agent || echo "OpenClaw start deferred"
 sudo -u ubuntu pm2 save
 sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu | tail -1 | bash || true
 

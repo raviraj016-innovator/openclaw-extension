@@ -24,7 +24,9 @@
       "Read(//c/Users/ravir/AppData/Roaming/**)",
       "Read(//c/Users/ravir/.openclaw//**)",
       "Bash(where openclaw:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(node -e \"const d=require\\(''''fs''''\\).readFileSync\\(''''/dev/stdin'''',''''utf8''''\\);const j=JSON.parse\\(d\\);const r=j.values?.root_module?.resources?.find\\(r=>r.address===''''aws_security_group.plugin''''\\);console.log\\(r?.values?.id||''''not found''''\\)\")",
+      "Bash(ls:*)"
     ]
   }
 }

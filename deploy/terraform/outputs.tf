@@ -3,6 +3,11 @@ output "instance_id" {
   value       = aws_instance.plugin.id
 }
 
+output "ssm_command" {
+  description = "Connect via SSM Session Manager (no SSH needed)"
+  value       = "aws ssm start-session --target ${aws_instance.plugin.id} --region ${var.region}"
+}
+
 output "public_ip" {
   description = "Elastic IP address"
   value       = aws_eip.plugin.public_ip

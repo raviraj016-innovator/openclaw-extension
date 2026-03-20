@@ -21,14 +21,17 @@
  *   │                     ┌──────┴──────┐                   │
  *   │                     │  WSHandler  │                   │
  *   │                     └──────┬──────┘                   │
- *   │                            │                          │
+ *   │                            │ emit                     │
+ *   │                     ┌──────┴──────┐                   │
+ *   │                     │ EventPipeline│                  │
+ *   │                     └──────┬──────┘                   │
  *   │              ┌─────────────┼─────────────┐            │
  *   │              ▼             ▼             ▼            │
- *   │       ContextStore   GatewayClient  SuggestionEngine  │
- *   │       (browser state) (OpenClaw API) (proactive help) │
- *   │                            │                          │
- *   │                            ▼                          │
- *   │                  OpenClaw Gateway :18789               │
+ *   │       ContactProcessor InteractionProc SuggestionProc │
+ *   │              │             │             │            │
+ *   │              ▼             ▼             ▼            │
+ *   │       ContextStore   ContextDB    GatewayClient       │
+ *   │       (browser state) (SQLite)   (OpenClaw API)       │
  *   └──────────────────────────────────────────────────────┘
  */
 
@@ -44,7 +47,11 @@ import { ContextDatabase } from './database.js';
 import { GatewayClient } from './gateway-client.js';
 import { SuggestionEngine } from './suggestion-engine.js';
 import { WSHandler } from './ws-handler.js';
+import { EventPipeline } from './event-pipeline.js';
+import { ContactProcessor } from './contact-processor.js';
+import { InteractionProcessor } from './interaction-processor.js';
 import { utcTimestamp } from './utc-timestamp.js';
+import { ChatHandler } from './chat-handler.js';
 
 // --- Config from environment ---
 
@@ -112,6 +119,15 @@ export function startPlugin(configOverride?: Partial<PluginConfig>): {
 
   console.log(`[${utcTimestamp()}] [DB] SQLite database at ~/.openclaw-extension/context.db`);
 
+  // Chat handler — uses Anthropic API to answer questions about browsing context
+  const anthropicKey = process.env['ANTHROPIC_API_KEY'] ?? process.env['ANTHROPIC_KEY'] ?? '';
+  const chatHandler = new ChatHandler(database, anthropicKey);
+  if (anthropicKey) {
+    console.log(`[${utcTimestamp()}] [Chat] Anthropic API key configured`);
+  } else {
+    console.log(`[${utcTimestamp()}] [Chat] No Anthropic API key — chat will return raw context`);
+  }
+
   // Suggestion callback — sends suggestion to the right connection
   function onSuggestion(suggestion: SuggestionMessage): void {
     for (const handler of handlers) {
@@ -120,6 +136,21 @@ export function startPlugin(configOverride?: Partial<PluginConfig>): {
   }
 
   const suggestionEngine = new SuggestionEngine(contextStore, gateway, onSuggestion);
+
+  // Event pipeline — processors subscribe to context events
+  const pipeline = new EventPipeline();
+  pipeline.register(new ContactProcessor(database, anthropicKey));
+  pipeline.register(new InteractionProcessor(database));
+  // SuggestionEngine as a pipeline processor
+  pipeline.register({
+    name: 'suggestion-engine',
+    process(event) {
+      if (event.type === 'context_update') {
+        suggestionEngine.evaluate(event.sessionId, event.payload);
+      }
+    },
+  });
+  console.log(`[${utcTimestamp()}] [Pipeline] Registered 3 event processors`);
 
   // HTTP server for health check and WebSocket upgrade
   const server = http.createServer((req, res) => {
@@ -150,15 +181,16 @@ export function startPlugin(configOverride?: Partial<PluginConfig>): {
 
     // CORS headers for browser-based consumers
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Headers', 'Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     if (req.method === 'OPTIONS') {
       res.writeHead(204);
       res.end();
       return;
     }
 
-    const json = (data: unknown) => {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+    const json = (data: unknown, status = 200) => {
+      res.writeHead(status, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(data, null, 2));
     };
 
@@ -169,8 +201,7 @@ export function startPlugin(configOverride?: Partial<PluginConfig>): {
       // Active tab — the page the user is currently looking at
       const active = contextStore.getActiveContext(sessionId);
       if (!active) {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ active: false, message: 'No active tab' }));
+        json({ active: false, message: 'No active tab' });
         return;
       }
       json({
@@ -242,14 +273,142 @@ export function startPlugin(configOverride?: Partial<PluginConfig>): {
       return;
     }
 
+    if (url.pathname === '/chat' && req.method === 'POST') {
+      // AI chat — ask questions about browsing context
+      chatHandler.handleChat(req, res);
+      return;
+    }
+
+    // --- Contacts API ---
+    if (url.pathname === '/contacts' && req.method === 'GET') {
+      const q = url.searchParams.get('q');
+      const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50', 10), 500);
+      const contacts = q
+        ? database.searchContacts(q, limit)
+        : database.getAllContacts(limit);
+      json({ count: contacts.length, contacts });
+      return;
+    }
+
+    if (url.pathname === '/contacts/stats') {
+      json(database.getContactStats());
+      return;
+    }
+
+    if (url.pathname === '/contacts/health') {
+      json(database.getContactHealthStats());
+      return;
+    }
+
+    if (url.pathname === '/contacts/linkedin-stats') {
+      json(database.getLinkedInStats());
+      return;
+    }
+
+    if (url.pathname === '/contacts/companies') {
+      const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '20', 10), 100);
+      json(database.getContactsByCompany(limit));
+      return;
+    }
+
+    if (url.pathname === '/contacts/merge-candidates') {
+      json({ candidates: database.findMergeCandidates() });
+      return;
+    }
+
+    if (url.pathname === '/contacts/export/csv') {
+      res.writeHead(200, {
+        'Content-Type': 'text/csv',
+        'Content-Disposition': 'attachment; filename="openclaw-contacts.csv"',
+      });
+      res.end(database.exportContactsCSV());
+      return;
+    }
+
+    if (url.pathname === '/contacts/export/vcard') {
+      res.writeHead(200, {
+        'Content-Type': 'text/vcard',
+        'Content-Disposition': 'attachment; filename="openclaw-contacts.vcf"',
+      });
+      res.end(database.exportContactsVCard());
+      return;
+    }
+
+    // DELETE /contacts/:id
+    const contactDeleteMatch = url.pathname.match(/^\/contacts\/(\d+)$/);
+    if (contactDeleteMatch && req.method === 'DELETE') {
+      const id = parseInt(contactDeleteMatch[1]!, 10);
+      const deleted = database.deleteContact(id);
+      if (deleted) {
+        json({ success: true, id });
+      } else {
+        json({ error: 'Contact not found' }, 404);
+      }
+      return;
+    }
+
+    // GET /contacts/:id
+    if (contactDeleteMatch && req.method === 'GET') {
+      const id = parseInt(contactDeleteMatch[1]!, 10);
+      const contact = database.getContact(id);
+      if (contact) {
+        json(contact);
+      } else {
+        json({ error: 'Contact not found' }, 404);
+      }
+      return;
+    }
+
+    // --- Persons API ---
+    const personTimelineMatch = url.pathname.match(/^\/persons\/(\d+)\/timeline$/);
+    if (personTimelineMatch) {
+      const personId = parseInt(personTimelineMatch[1]!, 10);
+      const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50', 10), 200);
+      json(database.getPersonTimeline(personId, limit));
+      return;
+    }
+
+    const personContactsMatch = url.pathname.match(/^\/persons\/(\d+)\/contacts$/);
+    if (personContactsMatch) {
+      const personId = parseInt(personContactsMatch[1]!, 10);
+      json({ contacts: database.getPersonContacts(personId) });
+      return;
+    }
+
+    const personScoreMatch = url.pathname.match(/^\/persons\/(\d+)\/score$/);
+    if (personScoreMatch) {
+      const personId = parseInt(personScoreMatch[1]!, 10);
+      json(database.getRelationshipScore(personId));
+      return;
+    }
+
+    // POST /persons/merge
+    if (url.pathname === '/persons/merge' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (chunk) => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const { keepId, mergeId } = JSON.parse(body);
+          if (!keepId || !mergeId) {
+            json({ error: 'keepId and mergeId required' }, 400);
+            return;
+          }
+          database.mergePersons(keepId, mergeId);
+          json({ success: true, keptPersonId: keepId });
+        } catch (e) {
+          json({ error: e instanceof Error ? e.message : String(e) }, 400);
+        }
+      });
+      return;
+    }
+
     if (url.pathname === '/context/tab') {
       // Full content of a specific tab
       const tabId = parseInt(url.searchParams.get('id') ?? '0', 10);
       const tabs = contextStore.getAllTabs(sessionId);
       const tab = tabs.find((t) => t.tabId === tabId);
       if (!tab) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Tab not found' }));
+        json({ error: 'Tab not found' }, 404);
         return;
       }
       json({
@@ -271,8 +430,7 @@ export function startPlugin(configOverride?: Partial<PluginConfig>): {
       return;
     }
 
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Not found' }));
+    json({ error: 'Not found' }, 404);
   });
 
   // WebSocket server
@@ -288,7 +446,7 @@ export function startPlugin(configOverride?: Partial<PluginConfig>): {
 
     console.log(`[${utcTimestamp()}] [Plugin] Extension connected`);
 
-    const handler = new WSHandler(ws, contextStore, database, gateway, suggestionEngine);
+    const handler = new WSHandler(ws, contextStore, database, gateway, pipeline);
     handlers.add(handler);
 
     ws.on('close', () => {
@@ -307,6 +465,7 @@ export function startPlugin(configOverride?: Partial<PluginConfig>): {
     console.log(`[${utcTimestamp()}]     All tabs:    http://localhost:${config.port}/context/tabs`);
     console.log(`[${utcTimestamp()}]     History:     http://localhost:${config.port}/context/history`);
     console.log(`[${utcTimestamp()}]     LLM Summary: http://localhost:${config.port}/context/summary`);
+    console.log(`[${utcTimestamp()}]     Contacts:    http://localhost:${config.port}/contacts`);
     console.log(`[${utcTimestamp()}]   WebSocket:     ws://localhost:${config.port}/ws/extension`);
     console.log(`[${utcTimestamp()}]   Tokens:        ${config.tokens.length} configured`);
   });

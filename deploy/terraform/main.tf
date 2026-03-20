@@ -34,43 +34,19 @@ resource "random_password" "extension_token" {
   special = false
 }
 
-resource "random_password" "gateway_token" {
-  length  = 48
-  special = false
-}
-
 locals {
   extension_token = var.extension_token != "" ? var.extension_token : random_password.extension_token[0].result
-  gateway_token   = random_password.gateway_token.result
 }
 
 # ============================================================================
 # SSM Parameter Store — all secrets
 # ============================================================================
 
-resource "aws_ssm_parameter" "anthropic_api_key" {
-  name        = "/${var.project_name}/anthropic-api-key"
-  description = "Anthropic API key for OpenClaw LLM calls"
-  type        = "SecureString"
-  value       = var.anthropic_api_key
-
-  tags = { Secret = "true" }
-}
-
 resource "aws_ssm_parameter" "extension_token" {
   name        = "/${var.project_name}/extension-token"
   description = "Token for browser extension WebSocket authentication"
   type        = "SecureString"
   value       = local.extension_token
-
-  tags = { Secret = "true" }
-}
-
-resource "aws_ssm_parameter" "gateway_token" {
-  name        = "/${var.project_name}/gateway-token"
-  description = "OpenClaw Gateway internal auth token"
-  type        = "SecureString"
-  value       = local.gateway_token
 
   tags = { Secret = "true" }
 }
@@ -122,6 +98,15 @@ resource "aws_security_group" "plugin" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # OpenClaw Gateway (direct access — needed because path-based proxy breaks WebSocket pairing)
+  ingress {
+    description = "OpenClaw Gateway"
+    from_port   = 18789
+    to_port     = 18789
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   # All outbound
   egress {
     from_port   = 0
@@ -146,6 +131,12 @@ resource "aws_iam_role" "ec2" {
       Principal = { Service = "ec2.amazonaws.com" }
     }]
   })
+}
+
+# SSM Session Manager access (replaces SSH)
+resource "aws_iam_role_policy_attachment" "ssm_managed" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
 resource "aws_iam_role_policy" "ssm_read" {

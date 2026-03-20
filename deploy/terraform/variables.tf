@@ -9,12 +9,6 @@ variable "domain" {
   type        = string
 }
 
-variable "anthropic_api_key" {
-  description = "Anthropic API key for OpenClaw"
-  type        = string
-  sensitive   = true
-}
-
 variable "extension_token" {
   description = "Token for browser extension authentication"
   type        = string

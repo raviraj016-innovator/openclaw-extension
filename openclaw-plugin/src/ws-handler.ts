@@ -8,9 +8,12 @@
  *   4. Backpressure signaling
  *   5. Graceful disconnect
  *
- *   Extension ──ws──▶ WSHandler ──▶ ContextStore (state)
+ *   Extension ──ws──▶ WSHandler ──emit──▶ EventPipeline
+ *                         │                    │──▶ ContactProcessor
+ *                         │                    │──▶ InteractionProcessor
+ *                         │                    │──▶ SuggestionEngine
+ *                         │──▶ ContextStore (state)
  *                         │──▶ GatewayClient (OpenClaw API)
- *                         │──▶ SuggestionEngine (proactive)
  *                         │◀── Suggestions (push to extension)
  */
 
@@ -26,8 +29,8 @@ import type {
 } from './types.js';
 import type { ContextStore } from './context-store.js';
 import type { GatewayClient } from './gateway-client.js';
-import type { SuggestionEngine } from './suggestion-engine.js';
 import type { ContextDatabase } from './database.js';
+import type { EventPipeline } from './event-pipeline.js';
 import { utcTimestamp } from './utc-timestamp.js';
 
 const MAX_RATE_PER_MINUTE = 30;
@@ -39,7 +42,7 @@ export class WSHandler {
   private contextStore: ContextStore;
   private database: ContextDatabase;
   private gateway: GatewayClient;
-  private suggestionEngine: SuggestionEngine;
+  private pipeline: EventPipeline;
   private messageTimestamps: number[] = [];
   private backpressureActive = false;
   private memoryWriteTimer: ReturnType<typeof setTimeout> | null = null;
@@ -51,13 +54,13 @@ export class WSHandler {
     contextStore: ContextStore,
     database: ContextDatabase,
     gateway: GatewayClient,
-    suggestionEngine: SuggestionEngine,
+    pipeline: EventPipeline,
   ) {
     this.ws = ws;
     this.contextStore = contextStore;
     this.database = database;
     this.gateway = gateway;
-    this.suggestionEngine = suggestionEngine;
+    this.pipeline = pipeline;
 
     this.ws.on('message', (data) => this.handleMessage(data));
     this.ws.on('close', () => this.handleClose());
@@ -182,9 +185,10 @@ export class WSHandler {
     this.contextStore.updateTab(msg.session_id, msg.payload, msg.sequence);
 
     // Persist to SQLite (survives restarts, queryable)
+    let currentVisitId: number | undefined;
     try {
       this.database.upsertSession(msg.session_id, msg.extension_version);
-      const visitId = this.database.insertVisit({
+      currentVisitId = this.database.insertVisit({
         sessionId: msg.session_id,
         tabId: msg.payload.tab_id,
         url: msg.payload.url,
@@ -195,15 +199,20 @@ export class WSHandler {
         siteDataJson: msg.payload.site_data ? JSON.stringify(msg.payload.site_data.data) : undefined,
         isActive: msg.payload.is_active_tab,
       });
-      this.lastVisitId.set(msg.payload.tab_id, visitId);
+      this.lastVisitId.set(msg.payload.tab_id, currentVisitId);
     } catch (e) {
       console.warn(`[${utcTimestamp()}] [WSHandler] DB write failed:`, e);
     }
 
-    // Memory push disabled — using pull model via /context/summary API instead
-
-    // Evaluate suggestion rules
-    this.suggestionEngine.evaluate(msg.session_id, msg.payload);
+    // Emit to event pipeline — processors handle contact extraction, suggestions, etc.
+    this.pipeline.emit({
+      type: 'context_update',
+      sessionId: msg.session_id,
+      visitId: currentVisitId,
+      payload: msg.payload,
+      sequence: msg.sequence,
+      extensionVersion: msg.extension_version,
+    });
   }
 
   private handleUserAction(msg: import('./types.js').UserActionMessage): void {
@@ -211,23 +220,14 @@ export class WSHandler {
     const action = msg.payload.action;
     const visitId = this.lastVisitId.get(msg.payload.tab_id);
 
-    console.log(`[${utcTimestamp()}] [ACTION] ${action.type} "${action.target.text?.slice(0, 40) ?? ''}" on ${action.url}`);
-
-    try {
-      this.database.insertInteraction({
-        sessionId: this.sessionId,
-        visitId,
-        tabId: msg.payload.tab_id,
-        type: action.type,
-        url: action.url,
-        targetSelector: action.target.selector,
-        targetTag: action.target.tagName,
-        targetText: action.target.text,
-        value: action.value,
-      });
-    } catch (e) {
-      console.warn(`[${utcTimestamp()}] [WSHandler] DB interaction write failed:`, e);
-    }
+    // Emit to event pipeline — InteractionProcessor records to DB
+    this.pipeline.emit({
+      type: 'user_action',
+      sessionId: this.sessionId,
+      tabId: msg.payload.tab_id,
+      action,
+      visitId,
+    });
   }
 
   private handleTabPing(msg: TabPingMessage): void {
